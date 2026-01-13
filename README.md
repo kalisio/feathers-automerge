@@ -14,8 +14,8 @@ This repository contains an example for a Feathers API with full offline-first c
 Install all the dependencies in the monorepo with
 
 ```sh
-git clone git@github.com:kalisio/offline-sync.git
-cd offline-sync
+git clone git@github.com:kalisio/feathers-automerge.git
+cd feathers-automerge
 yarn install
 ```
 

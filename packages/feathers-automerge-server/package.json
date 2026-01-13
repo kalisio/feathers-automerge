@@ -35,6 +35,5 @@
     "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
-  },
-  "gitHead": "7905146c5a541924c7e38acaae1fc98ecda00893"
+  }
 }

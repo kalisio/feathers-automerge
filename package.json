@@ -8,6 +8,7 @@
   "scripts": {
     "compile": "lerna run compile",
     "install": "yarn run compile",
+    "publish": "lerna publish",
     "test": "yarn compile && rm -rf data/ && lerna run test --scope server && vitest run --coverage",
     "vitest": "vitest run",
     "dev": "./dev.sh",

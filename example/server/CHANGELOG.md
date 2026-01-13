@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/kalisio/offline-sync/compare/v0.2.0...v0.3.0) (2026-01-13)
+
+
+### Features
+
+* Add option to initialise documents to sync ([#56](https://github.com/kalisio/offline-sync/issues/56)) ([bcedeb1](https://github.com/kalisio/offline-sync/commit/bcedeb14fb19bc62631f88f9419985c254e9738a))
+
+
+
+
+
 # 0.2.0 (2025-10-21)
 
 

@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/kalisio/offline-sync/compare/v0.2.0...v0.3.0) (2026-01-13)
+
+
+### Bug Fixes
+
+* Fix Automerge service pagination ([#54](https://github.com/kalisio/offline-sync/issues/54)) ([13161f5](https://github.com/kalisio/offline-sync/commit/13161f508dc48a454a462b593f52986058a098ed))
+
+
+### Features
+
+* Allow to initiate client-side automerge service before authentication (closes [#50](https://github.com/kalisio/offline-sync/issues/50)) ([86e7861](https://github.com/kalisio/offline-sync/commit/86e786185d2ca143605b026d71a5b5cc1261583f))
+
+
+
+
+
 # 0.2.0 (2025-10-21)
 
 

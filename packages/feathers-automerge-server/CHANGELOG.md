@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/kalisio/offline-sync/compare/v0.2.0...v0.3.0) (2026-01-13)
+
+
+### Bug Fixes
+
+* avoid syncing items without IDs (ie not persisted in DB) ([cd9fbd0](https://github.com/kalisio/offline-sync/commit/cd9fbd07bc4c83d440afb10bedc0883e3f9eece6))
+* Fix Automerge service pagination ([#54](https://github.com/kalisio/offline-sync/issues/54)) ([13161f5](https://github.com/kalisio/offline-sync/commit/13161f508dc48a454a462b593f52986058a098ed))
+
+
+### Features
+
+* Add option to initialise documents to sync ([#56](https://github.com/kalisio/offline-sync/issues/56)) ([bcedeb1](https://github.com/kalisio/offline-sync/commit/bcedeb14fb19bc62631f88f9419985c254e9738a))
+
+
+
+
+
 # 0.2.0 (2025-10-21)
 
 

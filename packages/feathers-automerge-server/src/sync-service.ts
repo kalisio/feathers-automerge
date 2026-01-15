@@ -242,14 +242,14 @@ export class AutomergeSyncService {
       })
     }
 
+    this.processedChanges.add(currentChangeId)
+
     await Promise.all(
       syncDocuments
         .map(({ url }) => this.docHandles[url])
         .filter(Boolean)
         .map(updateDocument)
     )
-
-    this.processedChanges.add(currentChangeId)
   }
 
   async syncExistingData(handle: DocHandle<unknown>) {

@@ -270,7 +270,12 @@ export class AutomergeSyncService {
 
     // Process each service's data in the document
     for (const servicePath of Object.keys(doc)) {
-      if (servicePath === '__meta' || !this.app.service(servicePath)) {
+      // app.service() throws when service not found, hence the try catch block
+      try {
+        if (servicePath === '__meta' || !this.app.service(servicePath)) {
+          continue
+        }
+      } catch (error: any) {
         continue
       }
 

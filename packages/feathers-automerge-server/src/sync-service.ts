@@ -398,7 +398,7 @@ export class AutomergeSyncService {
 
         options.serviceEvents?.forEach((eventName) =>
           service.on(eventName, async (payload, context) => {
-            const data = JSON.parse(JSON.stringify(payload))
+            const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
             this.handleEvent(servicePath, eventName, data, context)
           })
         )

@@ -100,7 +100,7 @@ export class AutomergeSyncService {
     }
 
     const docs = this.rootDocument.doc().documents
-    const { query } = payload
+    const { query, services: requestedServices } = payload
     const existingDocument = docs.find((document) => _.isEqual(document.query, query))
 
     await this.checkAccess(query, params)
@@ -110,7 +110,10 @@ export class AutomergeSyncService {
       return existingDocument
     }
 
-    const services = Object.keys(this.app.services).filter((path) => path !== this.servicePath)
+    const allServices = Object.keys(this.app.services).filter((path) => path !== this.servicePath)
+    const services = requestedServices
+      ? requestedServices.filter((path) => allServices.includes(path))
+      : allServices
     const data: SyncServiceDocument = {
       __meta: {}
     }

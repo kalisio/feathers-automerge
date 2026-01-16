@@ -24,14 +24,21 @@ type Todo = {
   username: string
 }
 
+type Message = {
+  id: number
+  text: string
+  username: string
+}
+
 type ServicesDocument = { todos: Record<string, Todo & { [CHANGE_ID]: string }> }
 
 export function createApp(options: Partial<SyncOptions>) {
-  const app = express(feathers<{ todos: MemoryService; automerge: AutomergeSyncService }>())
+  const app = express(feathers<{ todos: MemoryService; messages: MemoryService; automerge: AutomergeSyncService }>())
 
   app.use(json())
   app.configure(rest())
   app.use('todos', new MemoryService())
+  app.use('messages', new MemoryService())
   app.configure(
     automergeServer({
       ...options,
@@ -45,12 +52,26 @@ export function createApp(options: Partial<SyncOptions>) {
           })
         }
 
+        if (servicePath === 'messages') {
+          const { username } = query as { username: string }
+          return app.service('messages').find({
+            paginate: false,
+            query: username ? { username } : {}
+          })
+        }
+
         return []
       },
       async getDocumentsForData(servicePath: string, data: unknown, documents: SyncServiceInfo[]) {
         if (servicePath === 'todos') {
           return documents.filter((doc) => {
             return !doc.query.username || (data as Todo).username === doc.query.username
+          })
+        }
+
+        if (servicePath === 'messages') {
+          return documents.filter((doc) => {
+            return !doc.query.username || (data as Message).username === doc.query.username
           })
         }
 
@@ -71,6 +92,7 @@ describe('@kalisio/feathers-automerge-server', () => {
   let todo2: Todo
   let app: Application<{
     todos: MemoryService<Todo>
+    messages: MemoryService<Message>
     automerge: AutomergeSyncService
   }>
 
@@ -367,9 +389,95 @@ describe('@kalisio/feathers-automerge-server', () => {
     await app.service('automerge').repo.flush()
   })
 
+  describe('services option', () => {
+    it('includes all services by default', async () => {
+      const info = await app.service('automerge').create({
+        query: { username: 'allservices' }
+      })
+
+      const document = await app.service('automerge').repo.find(info.url as AnyDocumentId)
+      const doc = document.doc() as any
+
+      expect(doc.todos).toBeDefined()
+      expect(doc.messages).toBeDefined()
+      expect(doc.__meta.todos).toBeDefined()
+      expect(doc.__meta.messages).toBeDefined()
+
+      await app.service('automerge').remove(info.url)
+    })
+
+    it('includes only specified services when services option is provided', async () => {
+      const info = await app.service('automerge').create({
+        query: { username: 'todosonly' },
+        services: ['todos']
+      })
+
+      const document = await app.service('automerge').repo.find(info.url as AnyDocumentId)
+      const doc = document.doc() as any
+
+      expect(doc.todos).toBeDefined()
+      expect(doc.messages).toBeUndefined()
+      expect(doc.__meta.todos).toBeDefined()
+      expect(doc.__meta.messages).toBeUndefined()
+
+      await app.service('automerge').remove(info.url)
+    })
+
+    it('includes multiple specified services', async () => {
+      const info = await app.service('automerge').create({
+        query: { username: 'multipleservices' },
+        services: ['todos', 'messages']
+      })
+
+      const document = await app.service('automerge').repo.find(info.url as AnyDocumentId)
+      const doc = document.doc() as any
+
+      expect(doc.todos).toBeDefined()
+      expect(doc.messages).toBeDefined()
+      expect(doc.__meta.todos).toBeDefined()
+      expect(doc.__meta.messages).toBeDefined()
+
+      await app.service('automerge').remove(info.url)
+    })
+
+    it('filters out invalid service names', async () => {
+      const info = await app.service('automerge').create({
+        query: { username: 'invalidservice' },
+        services: ['todos', 'nonexistent', 'alsonotreal']
+      })
+
+      const document = await app.service('automerge').repo.find(info.url as AnyDocumentId)
+      const doc = document.doc() as any
+
+      expect(doc.todos).toBeDefined()
+      expect(doc.nonexistent).toBeUndefined()
+      expect(doc.alsonotreal).toBeUndefined()
+      expect(doc.__meta.todos).toBeDefined()
+
+      await app.service('automerge').remove(info.url)
+    })
+
+    it('creates empty document when all specified services are invalid', async () => {
+      const info = await app.service('automerge').create({
+        query: { username: 'novalid' },
+        services: ['nonexistent', 'alsonotreal']
+      })
+
+      const document = await app.service('automerge').repo.find(info.url as AnyDocumentId)
+      const doc = document.doc() as any
+
+      expect(doc.todos).toBeUndefined()
+      expect(doc.messages).toBeUndefined()
+      expect(doc.__meta).toEqual({})
+
+      await app.service('automerge').remove(info.url)
+    })
+  })
+
   describe('canAccess option', () => {
     let restrictedApp: Application<{
       todos: MemoryService<Todo>
+      messages: MemoryService<Message>
       automerge: AutomergeSyncService
     }>
 

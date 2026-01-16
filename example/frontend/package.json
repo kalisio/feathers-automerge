@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.3.8",
   "type": "module",
   "author": "Kalisio",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "@feathersjs/authentication-client": "^5.0.35",
     "@feathersjs/feathers": "^5.0.35",
     "@feathersjs/socketio-client": "^5.0.35",
-    "@kalisio/feathers-automerge": "^0.1.0",
+    "@kalisio/feathers-automerge": "^0.3.8",
     "socket.io-client": "^4.8.1",
     "vue": "^3.5.22"
   },
@@ -24,7 +24,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.8.1",
     "typescript": "~5.9.3",
-    "vite": "^7.1.10",
+    "vite": "^7.1.11",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.5.0",
     "vue-tsc": "^3.1.1"

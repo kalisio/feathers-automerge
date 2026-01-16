@@ -26,9 +26,7 @@ export type RootDocument = {
 }
 
 export interface SyncServiceOptions {
-  rootDocumentId: string
-  syncServicePath: string
-  canAccess: <T = unknown>(query: Query, user: T) => Promise<boolean>
+  canAccess: (query: Query, params: Params) => Promise<boolean>
   initializeDocument(
     servicePath: string,
     query: Query,
@@ -43,21 +41,22 @@ export interface SyncServiceOptions {
 
 export class AutomergeSyncService {
   app?: Application
-  rootDocument?: DocHandle<RootDocument>
   docHandles: Record<string, DocHandle<unknown>> = {}
   processedChanges = new Set<string>()
   // Track removals initiated by handleEvent to prevent syncing back to service
   // Format: "url:servicePath:id"
   pendingRemovals = new Set<string>()
+  servicePath?: string
 
   constructor(
     public repo: Repo,
+    public rootDocument: DocHandle<RootDocument>,
     public options: SyncServiceOptions
   ) {}
 
   async checkAccess(query: Query, params: SyncServiceParams, throwError = true) {
     if (params.provider) {
-      const allowed = await this.options.canAccess(query, params.user)
+      const allowed = await this.options.canAccess(query, params)
 
       if (!allowed && throwError) {
         throw new Forbidden('Access not allowed for this user')
@@ -70,10 +69,6 @@ export class AutomergeSyncService {
   }
 
   async find(params: SyncServiceParams = {}) {
-    if (!this.rootDocument) {
-      throw new Error('Root document not available. Did you call app.listen() or app.setup()?')
-    }
-
     const doc = this.rootDocument.doc()
 
     if (!doc) {
@@ -107,10 +102,6 @@ export class AutomergeSyncService {
       throw new Error('Application not available')
     }
 
-    if (!this.rootDocument) {
-      throw new Error('Root document not available')
-    }
-
     const docs = this.rootDocument.doc().documents
     const { query } = payload
     const existingDocument = docs.find((document) => _.isEqual(document.query, query))
@@ -122,7 +113,7 @@ export class AutomergeSyncService {
       return existingDocument
     }
 
-    const services = Object.keys(this.app.services).filter((path) => path !== this.options.syncServicePath)
+    const services = Object.keys(this.app.services).filter((path) => path !== this.servicePath)
     const data: SyncServiceDocument = {
       __meta: {}
     }
@@ -140,7 +131,8 @@ export class AutomergeSyncService {
         if (serviceData !== null) {
           const convertedData: unknown[] = JSON.parse(JSON.stringify(serviceData))
           const idField = service?.id || 'id'
-          const paginate = serviceOptions?.paginate || { default: 10, max: 10 }
+          const paginate = serviceOptions?.paginate ||
+            (service as any).options?.paginate || { default: 10, max: 10 }
 
           data.__meta[servicePath] = { idField, paginate }
           data[servicePath] = convertedData.reduce<Record<string, unknown>>(
@@ -313,6 +305,7 @@ export class AutomergeSyncService {
 
         // Get the actual ID from the record using the service's idField
         const recordId = data[idField]
+        if (!recordId) continue
 
         // Check if record already exists locally
         try {
@@ -408,7 +401,7 @@ export class AutomergeSyncService {
 
   async setup(app: Application, myPath: string) {
     this.app = app
-    this.rootDocument = await this.repo.find<RootDocument>(this.options.rootDocumentId as AnyDocumentId)
+    this.servicePath = myPath
 
     const infos = await this.find()
 

@@ -1,5 +1,5 @@
 {
-  "name": "offline-sync",
+  "name": "feathers-automerge",
   "version": "1.0.0",
   "description": "## Goal",
   "private": true,
@@ -8,13 +8,13 @@
   "scripts": {
     "compile": "lerna run compile",
     "install": "yarn run compile",
-    "test": "yarn compile && lerna run test --scope server && vitest run --coverage",
+    "publish": "lerna publish",
+    "test": "yarn compile && rm -rf data/ && lerna run test --scope server && vitest run --coverage",
     "vitest": "vitest run",
     "dev": "./dev.sh",
     "lint": "lerna run lint",
     "lint:fix": "lerna run lint:fix",
     "update-dependencies": "npm-check-updates -u && lerna exec -- npm-check-updates -u",
-    "init": "echo AUTOMERGE_ROOT_DOCUMENT=\\\"$(node example/server/initialize.js)\\\" > example/server/.env",
     "s2s": "cd example/server && NODE_ENV=s2s npm run dev"
   },
   "workspaces": [
@@ -30,6 +30,6 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "npm-check-updates": "^19.1.0"
+    "npm-check-updates": "^19.1.1"
   }
 }

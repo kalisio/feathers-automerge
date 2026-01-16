@@ -262,9 +262,9 @@ export class AutomergeSyncService {
       })
     })
 
-    await Promise.all(updatePromises)
-
     this.processedChanges.add(currentChangeId)
+    
+    await Promise.all(updatePromises)
   }
 
   async syncExistingData(handle: DocHandle<unknown>) {
@@ -285,7 +285,12 @@ export class AutomergeSyncService {
 
     // Process each service's data in the document
     for (const servicePath of Object.keys(doc)) {
-      if (servicePath === '__meta' || !this.app.service(servicePath)) {
+      // app.service() throws when service not found, hence the try catch block
+      try {
+        if (servicePath === '__meta' || !this.app.service(servicePath)) {
+          continue
+        }
+      } catch (error: any) {
         continue
       }
 
@@ -416,7 +421,7 @@ export class AutomergeSyncService {
 
         options.serviceEvents?.forEach((eventName) =>
           service.on(eventName, async (payload, context) => {
-            const data = JSON.parse(JSON.stringify(payload))
+            const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
             this.handleEvent(servicePath, eventName, data, context)
           })
         )

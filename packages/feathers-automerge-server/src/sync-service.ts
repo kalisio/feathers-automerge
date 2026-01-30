@@ -223,6 +223,11 @@ export class AutomergeSyncService {
           const id = data[idField]
           const changeId: string = _.get(doc, [servicePath, id, CHANGE_ID])
 
+          if (!doc[servicePath]) {
+            // doc.__meta[servicePath] = { idField: idField, paginate: { default: 10, max: 50 } }
+            doc[servicePath] = {}
+          }
+
           if (doc[servicePath] && currentChangeId !== changeId) {
             if (eventName === 'removed' && doc[servicePath][id]) {
               debug(`Removing ${id} from ${servicePath}`)
@@ -334,8 +339,11 @@ export class AutomergeSyncService {
 
       patches.forEach((patch) => {
         const [path, id] = patch.path
-        serviceChanges[path] = serviceChanges[path] || new Set()
-        serviceChanges[path].add(id.toString())
+        // id may be undefined when path has just been added as a newly listened service
+        if (id) {
+          serviceChanges[path] = serviceChanges[path] || new Set()
+          serviceChanges[path].add(id.toString())
+        }
       })
 
       await Promise.all(
@@ -381,6 +389,21 @@ export class AutomergeSyncService {
     })
   }
 
+  listenService(servicePath: string) {
+    if (!this.app) return
+    const service = this.app.service(servicePath)
+    const options = feathers.getServiceOptions(service)
+
+    debug(`Listening to service ${servicePath} events ${options.serviceEvents}`)
+
+    options.serviceEvents?.forEach((eventName) =>
+      service.on(eventName, async (payload, context) => {
+        const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
+        this.handleEvent(servicePath, eventName, data, context)
+      })
+    )
+  }
+
   async setup(app: Application, myPath: string) {
     this.app = app
     this.servicePath = myPath
@@ -390,19 +413,7 @@ export class AutomergeSyncService {
     await Promise.all(infos.map((info) => this.handleDocument(info)))
 
     Object.keys(app.services).forEach((servicePath) => {
-      if (servicePath !== myPath) {
-        const service = app.service(servicePath)
-        const options = feathers.getServiceOptions(service)
-
-        debug(`Listening to service ${servicePath} events ${options.serviceEvents}`)
-
-        options.serviceEvents?.forEach((eventName) =>
-          service.on(eventName, async (payload, context) => {
-            const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
-            this.handleEvent(servicePath, eventName, data, context)
-          })
-        )
-      }
+      if (servicePath !== myPath) this.listenService(servicePath)
     })
   }
 }

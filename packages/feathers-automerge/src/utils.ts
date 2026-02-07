@@ -12,6 +12,7 @@ export type SyncServiceInfo = {
 
 export type SyncServiceCreate = {
   query: Query
+  services?: string[]
 }
 
 export type SyncServiceDocument = Record<string, Record<string, unknown>> & {

@@ -43,6 +43,9 @@ export class AutomergeSyncService {
   app?: Application
   docHandles: Record<string, DocHandle<unknown>> = {}
   processedChanges = new Set<string>()
+  // Track removals initiated by handleEvent to prevent syncing back to service
+  // Format: "url:servicePath:id"
+  pendingRemovals = new Set<string>()
   servicePath?: string
 
   constructor(
@@ -100,7 +103,7 @@ export class AutomergeSyncService {
     }
 
     const docs = this.rootDocument.doc().documents
-    const { query } = payload
+    const { query, services: requestedServices } = payload
     const existingDocument = docs.find((document) => _.isEqual(document.query, query))
 
     await this.checkAccess(query, params)
@@ -110,7 +113,10 @@ export class AutomergeSyncService {
       return existingDocument
     }
 
-    const services = Object.keys(this.app.services).filter((path) => path !== this.servicePath)
+    const allServices = Object.keys(this.app.services).filter((path) => path !== this.servicePath)
+    const services = requestedServices
+      ? requestedServices.filter((path) => allServices.includes(path))
+      : allServices
     const data: SyncServiceDocument = {
       __meta: {}
     }
@@ -217,10 +223,20 @@ export class AutomergeSyncService {
     const syncDocuments = await getDocumentsForData(servicePath, data, documents)
     const idField = service.id || 'id'
     const currentChangeId = context.params.automerge?.changeId || generateUUID()
-    const updateDocument = async (handle: DocHandle<unknown>) => {
+    const id = data[idField]
+
+    // Build a set of URLs that should contain this data
+    const matchingUrls = new Set(syncDocuments.map(({ url }) => url))
+
+    // Update or remove data in all documents
+    const updatePromises = documents.map(({ url }) => {
+      const handle = this.docHandles[url]
+      if (!handle) return Promise.resolve()
+
+      const shouldContain = matchingUrls.has(url)
+
       return new Promise<void>((resolve) => {
         handle.change((doc: any) => {
-          const id = data[idField]
           const changeId: string = _.get(doc, [servicePath, id, CHANGE_ID])
 
           if (!doc[servicePath]) {
@@ -229,12 +245,19 @@ export class AutomergeSyncService {
           }
 
           if (doc[servicePath] && currentChangeId !== changeId) {
-            if (eventName === 'removed' && doc[servicePath][id]) {
-              debug(`Removing ${id} from ${servicePath}`)
-              delete doc[servicePath][id]
-            }
-            if (['updated', 'patched', 'created'].includes(eventName)) {
-              debug(`Updating ${id} for ${servicePath}`)
+            const exists = doc[servicePath][id] !== undefined
+
+            if (eventName === 'removed' || !shouldContain) {
+              // Remove if: 1) explicit removal, or 2) doesn't match query
+              if (exists) {
+                debug(`Removing ${id} from ${servicePath} in document ${url}`)
+                // Track this removal to prevent syncing back to service
+                this.pendingRemovals.add(`${url}:${servicePath}:${id}`)
+                delete doc[servicePath][id]
+              }
+            } else if (shouldContain && ['updated', 'patched', 'created'].includes(eventName)) {
+              // Add or update if matches query
+              debug(`${exists ? 'Updating' : 'Adding'} ${id} for ${servicePath} in document ${url}`)
               doc[servicePath][id] = {
                 ...data,
                 [CHANGE_ID]: currentChangeId
@@ -245,16 +268,11 @@ export class AutomergeSyncService {
           resolve()
         })
       })
-    }
+    })
 
     this.processedChanges.add(currentChangeId)
-
-    await Promise.all(
-      syncDocuments
-        .map(({ url }) => this.docHandles[url])
-        .filter(Boolean)
-        .map(updateDocument)
-    )
+    
+    await Promise.all(updatePromises)
   }
 
   async syncExistingData(handle: DocHandle<unknown>) {
@@ -369,8 +387,16 @@ export class AutomergeSyncService {
                 }
               } else if (!after[path]?.[id]) {
                 // Removed
-                debug(`Service ${path} remove ${id}`)
-                await this.app.service(path).remove(id, params)
+                const removalKey = `${url}:${path}:${id}`
+                if (this.pendingRemovals.has(removalKey)) {
+                  // This removal was initiated by handleEvent, don't sync back to service
+                  debug(`Skipping service ${path} remove ${id} (initiated by handleEvent)`)
+                  this.pendingRemovals.delete(removalKey)
+                } else {
+                  // This removal was initiated by document change, sync to service
+                  debug(`Service ${path} remove ${id}`)
+                  await this.app.service(path).remove(id, params)
+                }
               } else if (before[path]?.[id]) {
                 if (!this.processedChanges.has(changeId)) {
                   // Patched

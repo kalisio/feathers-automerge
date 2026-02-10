@@ -220,6 +220,7 @@ export class AutomergeSyncService {
     const { getDocumentsForData } = this.options
     const documents = this.rootDocument.doc().documents
     const service = this.app.service(servicePath)
+    const serviceOptions = feathers.getServiceOptions(service) as AdapterServiceOptions
     const syncDocuments = await getDocumentsForData(servicePath, data, documents)
     const idField = service.id || 'id'
     const currentChangeId = context.params.automerge?.changeId || generateUUID()
@@ -239,8 +240,10 @@ export class AutomergeSyncService {
         handle.change((doc: any) => {
           const changeId: string = _.get(doc, [servicePath, id, CHANGE_ID])
 
-          if (!doc[servicePath]) {
-            // doc.__meta[servicePath] = { idField: idField, paginate: { default: 10, max: 50 } }
+          if (shouldContain && !doc[servicePath]) {
+            const paginate = serviceOptions?.paginate ||
+              (service as any).options?.paginate || { default: 10, max: 10 }
+            doc.__meta[servicePath] = { idField: idField, paginate }
             doc[servicePath] = {}
           }
 
@@ -357,6 +360,10 @@ export class AutomergeSyncService {
 
       patches.forEach((patch) => {
         const [path, id] = patch.path
+        // Skip patches touching the __meta root object
+        if (path === '__meta') {
+           return
+        }
         // id may be undefined when path has just been added as a newly listened service
         if (id) {
           serviceChanges[path] = serviceChanges[path] || new Set()

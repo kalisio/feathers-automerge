@@ -228,6 +228,9 @@ export class AutomergeSyncService {
     // Build a set of URLs that should contain this data
     const matchingUrls = new Set(syncDocuments.map(({ url }) => url))
 
+    // Record chandId _before_ updating automerge
+    this.processedChanges.add(currentChangeId)
+
     // Update or remove data in all documents
     const updatePromises = documents.map(({ url }) => {
       const handle = this.docHandles[url]
@@ -270,8 +273,6 @@ export class AutomergeSyncService {
       })
     })
 
-    this.processedChanges.add(currentChangeId)
-    
     await Promise.all(updatePromises)
   }
 

@@ -215,12 +215,23 @@ export class AutomergeSyncService {
       throw new Error('Root document not available')
     }
 
+    const isRemove = eventName === 'removed'
+    const isAddOrUpdate = ['updated', 'patched', 'created'].includes(eventName)
+    // Skip events that are not going to contribute to the automerge document(s)
+    if (!isRemove && !isAddOrUpdate) {
+       return
+    }
+
     debug(`Handling service event ${servicePath} ${eventName}`)
 
     const { getDocumentsForData } = this.options
     const documents = this.rootDocument.doc().documents
     const service = this.app.service(servicePath)
     const syncDocuments = await getDocumentsForData(servicePath, data, documents)
+    // Skip when there's no target automerge documents to update
+    if (syncDocuments.length === 0) {
+       return
+    }
     const idField = service.id || 'id'
     const currentChangeId = context.params.automerge?.changeId || generateUUID()
     const id = data[idField]
@@ -242,7 +253,7 @@ export class AutomergeSyncService {
           if (doc[servicePath] && currentChangeId !== changeId) {
             const exists = doc[servicePath][id] !== undefined
 
-            if (eventName === 'removed' || !shouldContain) {
+            if (isRemove || !shouldContain) {
               // Remove if: 1) explicit removal, or 2) doesn't match query
               if (exists) {
                 debug(`Removing ${id} from ${servicePath} in document ${url}`)
@@ -250,7 +261,7 @@ export class AutomergeSyncService {
                 this.pendingRemovals.add(`${url}:${servicePath}:${id}`)
                 delete doc[servicePath][id]
               }
-            } else if (shouldContain && ['updated', 'patched', 'created'].includes(eventName)) {
+            } else if (shouldContain && isAddOrUpdate) {
               // Add or update if matches query
               debug(`${exists ? 'Updating' : 'Adding'} ${id} for ${servicePath} in document ${url}`)
               doc[servicePath][id] = {

@@ -69,7 +69,8 @@ export function createApp(options: Partial<SyncOptions>) {
           })
         }
 
-        if (servicePath === 'messages') {
+        // This will collect data from every service including 'messages' in it's path
+        if (servicePath.includes('messages')) {
           return documents.filter((doc) => {
             return !doc.query.username || (data as Message).username === doc.query.username
           })
@@ -760,6 +761,67 @@ describe('@kalisio/feathers-automerge-server', () => {
       }
       expect(() => validateSyncServerOptions(fullOptions)).not.toThrow()
       expect(validateSyncServerOptions(fullOptions)).toBe(true)
+    })
+  })
+
+  describe('listen to dynamically created services feature', () => {
+    let dynamicApp: Application<{
+      todos: MemoryService<Todo>
+      messages: MemoryService<Message>
+      automerge: AutomergeSyncService
+    }>
+    let fooMessagesDoc: DocHandle<unknown>
+
+    beforeAll(async () => {
+      dynamicApp = createApp({
+        directory,
+        serverId: 'dynamic-server',
+        async authenticate() {
+          return true
+        },
+        async canAccess(query, params) {
+          return true
+        }
+      })
+
+      await dynamicApp.listen(9191)
+    })
+
+    it('initializes an app', async () => {
+      // Create an automerge document to gather all objects in all *messages* services
+      // By default app has a single 'messages' service and will collect events
+      // from services whose path includes 'messages', cf. createApp > getDocumentsForData
+      const fooMessagesInfos = await dynamicApp.service('automerge').create({
+        query: {
+          username: 'foo'
+        }
+      })
+      fooMessagesDoc = await dynamicApp.service('automerge').repo.find(fooMessagesInfos.url as AnyDocumentId)
+
+      // Create a message for foo and make sure it exists in the underlying automerge doc
+      const msg1 = await dynamicApp.service('messages').create({
+        text: 'How are you ?',
+        username: 'foo'
+      })
+      expect(fooMessagesDoc.doc().messages[msg1.id]).toBeDefined()
+      expect(fooMessagesDoc.doc().messages[msg1.id].username).toBe('foo')
+      expect(fooMessagesDoc.doc().messages[msg1.id].text).toBe('How are you ?')
+    })
+
+    it('creates a new service to publish important messages', async () => {
+      // Create a new service for important-messages and make the automerge service aware of this one
+      const servicePath = 'important-messages'
+      dynamicApp.use(servicePath, new MemoryService())
+      dynamicApp.service('automerge').listenService(servicePath)
+
+      // Publish an important message and make sure it also exists in the automerge doc
+      const msg2 = await dynamicApp.service('important-messages').create({
+        text: 'We need you !',
+        username: 'foo'
+      })
+      expect(fooMessagesDoc.doc()[servicePath][msg2.id]).toBeDefined()
+      expect(fooMessagesDoc.doc()[servicePath][msg2.id].username).toBe('foo')
+      expect(fooMessagesDoc.doc()[servicePath][msg2.id].text).toBe('We need you !')
     })
   })
 })

@@ -227,6 +227,7 @@ export class AutomergeSyncService {
     const { getDocumentsForData } = this.options
     const documents = this.rootDocument.doc().documents
     const service = this.app.service(servicePath)
+    const serviceOptions = feathers.getServiceOptions(service) as AdapterServiceOptions
     const syncDocuments = await getDocumentsForData(servicePath, data, documents)
     // Skip when there's no target automerge documents to update
     if (syncDocuments.length === 0) {
@@ -252,6 +253,13 @@ export class AutomergeSyncService {
       return new Promise<void>((resolve) => {
         handle.change((doc: any) => {
           const changeId: string = _.get(doc, [servicePath, id, CHANGE_ID])
+
+          if (shouldContain && !doc[servicePath]) {
+            const paginate = serviceOptions?.paginate ||
+              (service as any).options?.paginate || { default: 10, max: 10 }
+            doc.__meta[servicePath] = { idField: idField, paginate }
+            doc[servicePath] = {}
+          }
 
           if (doc[servicePath] && currentChangeId !== changeId) {
             const exists = doc[servicePath][id] !== undefined
@@ -364,8 +372,15 @@ export class AutomergeSyncService {
 
       patches.forEach((patch) => {
         const [path, id] = patch.path
-        serviceChanges[path] = serviceChanges[path] || new Set()
-        serviceChanges[path].add(id.toString())
+        // Skip patches touching the __meta root object
+        if (path === '__meta') {
+           return
+        }
+        // id may be undefined when path has just been added as a newly listened service
+        if (id) {
+          serviceChanges[path] = serviceChanges[path] || new Set()
+          serviceChanges[path].add(id.toString())
+        }
       })
 
       await Promise.all(
@@ -419,6 +434,21 @@ export class AutomergeSyncService {
     })
   }
 
+  listenService(servicePath: string) {
+    if (!this.app) return
+    const service = this.app.service(servicePath)
+    const options = feathers.getServiceOptions(service)
+
+    debug(`Listening to service ${servicePath} events ${options.serviceEvents}`)
+
+    options.serviceEvents?.forEach((eventName) =>
+      service.on(eventName, async (payload, context) => {
+        const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
+        this.handleEvent(servicePath, eventName, data, context)
+      })
+    )
+  }
+
   async setup(app: Application, myPath: string) {
     this.app = app
     this.servicePath = myPath
@@ -428,19 +458,7 @@ export class AutomergeSyncService {
     await Promise.all(infos.map((info) => this.handleDocument(info)))
 
     Object.keys(app.services).forEach((servicePath) => {
-      if (servicePath !== myPath) {
-        const service = app.service(servicePath)
-        const options = feathers.getServiceOptions(service)
-
-        debug(`Listening to service ${servicePath} events ${options.serviceEvents}`)
-
-        options.serviceEvents?.forEach((eventName) =>
-          service.on(eventName, async (payload, context) => {
-            const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
-            this.handleEvent(servicePath, eventName, data, context)
-          })
-        )
-      }
+      if (servicePath !== myPath) this.listenService(servicePath)
     })
   }
 }

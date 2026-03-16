@@ -222,8 +222,6 @@ export class AutomergeSyncService {
        return
     }
 
-    debug(`Handling service event ${servicePath} ${eventName}`)
-
     const { getDocumentsForData } = this.options
     const documents = this.rootDocument.doc().documents
     const service = this.app.service(servicePath)
@@ -236,6 +234,8 @@ export class AutomergeSyncService {
     const idField = service.id || 'id'
     const currentChangeId = context.params.automerge?.changeId || generateUUID()
     const id = data[idField]
+
+    debug(`${currentChangeId}/service: Handling ${eventName} on ${servicePath} ...`)
 
     // Build a set of URLs that should contain this data
     const matchingUrls = new Set(syncDocuments.map(({ url }) => url))
@@ -267,14 +267,14 @@ export class AutomergeSyncService {
             if (isRemove || !shouldContain) {
               // Remove if: 1) explicit removal, or 2) doesn't match query
               if (exists) {
-                debug(`Removing ${id} from ${servicePath} in document ${url}`)
+                debug(`${currentChangeId}/service: Removing ${id} from ${servicePath} in document ${url}`)
                 // Track this removal to prevent syncing back to service
                 this.pendingRemovals.add(`${url}:${servicePath}:${id}`)
                 delete doc[servicePath][id]
               }
             } else if (shouldContain && isAddOrUpdate) {
               // Add or update if matches query
-              debug(`${exists ? 'Updating' : 'Adding'} ${id} for ${servicePath} in document ${url}`)
+              debug(`${currentChangeId}/service: ${exists ? 'Updating' : 'Adding'} ${id} for ${servicePath} in document ${url}`)
               doc[servicePath][id] = {
                 ...data,
                 [CHANGE_ID]: currentChangeId
@@ -288,6 +288,8 @@ export class AutomergeSyncService {
     })
 
     await Promise.all(updatePromises)
+
+    debug(`${currentChangeId}/service: Done handling ${eventName} on ${servicePath}`)
   }
 
   async syncExistingData(handle: DocHandle<unknown>) {
@@ -368,7 +370,7 @@ export class AutomergeSyncService {
       const { before, after } = patchInfo as any
       const serviceChanges: Record<string, Set<string>> = {}
 
-      debug(`Handling change on document ${url}`)
+      debug(`automerge: Handling change on document ${url} ...`)
 
       patches.forEach((patch) => {
         const [path, id] = patch.path
@@ -401,26 +403,29 @@ export class AutomergeSyncService {
               if (!before[path]?.[id]) {
                 if (!this.processedChanges.has(changeId)) {
                   // Created
-                  debug(`Service ${path} create ${id}`)
+                  debug(`${changeId}/automerge: Creating ${id} on ${path} ...`)
                   await this.app.service(path).create(data, params)
+                  debug(`${changeId}/automerge: Done creating ${id} on ${path}`)
                 }
               } else if (!after[path]?.[id]) {
                 // Removed
                 const removalKey = `${url}:${path}:${id}`
                 if (this.pendingRemovals.has(removalKey)) {
                   // This removal was initiated by handleEvent, don't sync back to service
-                  debug(`Skipping service ${path} remove ${id} (initiated by handleEvent)`)
+                  debug(`${changeId}/automerge: Skipping service ${path} remove ${id} (initiated by handleEvent)`)
                   this.pendingRemovals.delete(removalKey)
                 } else {
                   // This removal was initiated by document change, sync to service
-                  debug(`Service ${path} remove ${id}`)
+                  debug(`${changeId}/automerge: Removing ${id} on ${path} ...`)
                   await this.app.service(path).remove(id, params)
+                  debug(`${changeId}/automerge: Done removing ${id} on ${path}`)
                 }
               } else if (before[path]?.[id]) {
                 if (!this.processedChanges.has(changeId)) {
                   // Patched
-                  debug(`Service ${path} patch ${id}`)
+                  debug(`${changeId}/automerge: Patching ${id} on ${path} ...`)
                   await this.app.service(path).patch(id, data, params)
+                  debug(`${changeId}/automerge: Done patching ${id} on ${path}`)
                 }
               }
 
@@ -431,6 +436,8 @@ export class AutomergeSyncService {
           }
         })
       )
+
+      debug(`automerge: Done handling change on document ${url}`)
     })
   }
 
@@ -444,7 +451,7 @@ export class AutomergeSyncService {
     options.serviceEvents?.forEach((eventName) =>
       service.on(eventName, async (payload, context) => {
         const data = payload !== undefined ? JSON.parse(JSON.stringify(payload)) : undefined
-        this.handleEvent(servicePath, eventName, data, context)
+        await this.handleEvent(servicePath, eventName, data, context)
       })
     )
   }

@@ -774,7 +774,7 @@ describe('@kalisio/feathers-automerge-server', () => {
 
     beforeAll(async () => {
       dynamicApp = createApp({
-        directory,
+        directory: path.join(__dirname, '..', '..', '..', 'data', 'automerge-test-dyn'),
         serverId: 'dynamic-server',
         async authenticate() {
           return true
@@ -823,5 +823,118 @@ describe('@kalisio/feathers-automerge-server', () => {
       expect(fooMessagesDoc.doc()[servicePath][msg2.id].username).toBe('foo')
       expect(fooMessagesDoc.doc()[servicePath][msg2.id].text).toBe('We need you !')
     })
+  })
+
+  describe('issue with event emitters', () => {
+    let app1: Application<{
+      todos: MemoryService<Todo>
+      messages: MemoryService<Message>
+      automerge: AutomergeSyncService
+    }>
+    let app2: Application<{
+      todos: MemoryService<Todo>
+      messages: MemoryService<Message>
+      automerge: AutomergeSyncService
+    }>
+
+    beforeAll(async () => {
+      app1 = createApp({
+        directory: path.join(__dirname, '..', '..', '..', 'data', 'automerge-test-app1'),
+        serverId: 'app1',
+        async authenticate() {
+          return true
+        },
+        async canAccess(query, params) {
+          return true
+        }
+      })
+
+      await app1.listen(9292)
+
+      app2 = createApp({
+        directory: path.join(__dirname, '..', '..', '..', 'data', 'automerge-test-app2'),
+        serverId: 'app2',
+        syncServerUrl: 'http://localhost:9292/',
+        getInitialDocuments: async () => {
+          const document = await app1.service('automerge').create({
+            query: { username: 'foo' }
+          })
+          return [document]
+        },
+        async authenticate() {
+          return true
+        },
+        async canAccess(query, params) {
+          return true
+        }
+      })
+
+      await app2.listen(9393)
+    })
+
+    it('initializes an app', async () => {
+      // Add hooks on message service that'll trigger the issue
+      const svc2 = app2.service('messages')
+      const order = [] as string[]
+      svc2.hooks({
+        before: {
+          patch: [
+            async (context: HookContext) => {
+              console.log(`About to wait for ${context.data.timeout} for ${context.data.text}`)
+              await new Promise((resolve) => setTimeout(resolve, context.data.timeout))
+            }
+          ]
+        },
+        after: {
+          patch: [
+            (context: HookContext) => {
+              console.log(`Done waiting ${context.data.timeout} for ${context.data.text}`)
+              // order.push(context.data.text)
+              order.push(`patch ${context.data.id}`)
+            }
+          ],
+          remove: [
+            (context: HookContext) => {
+              // console.log(`Done waiting ${context.data.timeout} for ${context.data.text}`)
+              order.push('remove')
+            }
+          ],
+        }
+      })
+
+      // Create a few messages for user 'foo' from app2
+      const msg1 = await svc2.create({ text: 'blabla', username: 'foo' })
+      const msg2 = await svc2.create({ text: 'blibli', username: 'foo' })
+
+      // Give it time to propagate to app1
+      await new Promise((resolve) => setTimeout(resolve, 250))
+
+      const svc1 = app1.service('messages')
+
+      // Now patch them from app1, and let automerge patch in app2
+      await svc1.patch(msg1.id, { timeout: 2000 })
+      await svc1.patch(msg2.id, { timeout: 250 })
+
+      // Give it time to propagate to app2
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
+      expect(order.length === 2)
+      expect(order[0]).to.equal(`patch ${msg1.id}`)
+      expect(order[1]).to.equal(`patch ${msg2.id}`)
+      order.length = 0
+
+      // Now patch and delete from app1, and let automerge patch in app2
+      await svc1.patch(msg1.id, { timeout: 2000 })
+      // Give time to patch to propagate to app2 and initiate its hooks
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      await svc1.remove(msg1.id)
+
+      // Give it time to propagate to app2
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+
+      expect(order.length === 2)
+      expect(order[0]).to.equal(`patch ${msg1.id}`)
+      expect(order[1]).to.equal('remove')
+    }, 10000)
   })
 })

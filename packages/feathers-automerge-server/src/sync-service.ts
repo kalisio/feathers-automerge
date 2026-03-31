@@ -12,7 +12,8 @@ import {
   Query,
   generateObjectId,
   generateUUID,
-  CHANGE_ID
+  CHANGE_ID,
+  findDocument
 } from '@kalisio/feathers-automerge'
 
 const debug = createDebug('feathers-automerge-server/sync-service')
@@ -359,12 +360,18 @@ export class AutomergeSyncService {
   }
 
   async handleDocument({ url }: SyncServiceInfo) {
-    const handle = await this.repo.find(url)
+    const augmentedHandle = await findDocument(this.repo, url)
+    const handle = augmentedHandle.handle
 
     this.docHandles[url] = handle
 
     // Sync existing data from the document to local services
     await this.syncExistingData(handle)
+    if (!augmentedHandle.wasKnown) {
+      // Automerge document got fetched from some other peer
+      // populate it with our local data
+      await this.populateAutomerge(handle)
+    }
 
     handle.on('change', async ({ patches, patchInfo }) => {
       const { before, after } = patchInfo as any
@@ -467,5 +474,52 @@ export class AutomergeSyncService {
     Object.keys(app.services).forEach((servicePath) => {
       if (servicePath !== myPath) this.listenService(servicePath)
     })
+  }
+
+  async populateAutomerge(handle: DocHandle<unknown>) {
+    if (!this.app) {
+      debug('Feathers application not available for syncing existing data')
+      return
+    }
+
+    const allChanges = [] as Promise<void>[]
+    const doc = handle.doc() as any
+    const meta = doc.__meta
+
+    const docs = this.rootDocument.doc().documents
+    const infos = docs.find((infos) => infos.url === handle.url)
+    if (!infos) return
+    const { query, url } = infos
+
+    debug(`Populating automerge document ${url} ...`)
+
+    for (const servicePath of Object.keys(meta)) {
+      const service = this.app.service(servicePath)
+      const idField = meta[servicePath].idField
+      const serviceData = await this.options.initializeDocument(servicePath, query, docs) as Array<any>
+      if (!serviceData?.length) continue
+
+      const p = new Promise<void>((resolve) => {
+        handle.change((doc: any) => {
+          for (const object of serviceData) {
+            // Generate a change id
+            const changeId = generateUUID()
+            // And remember it as already processed to avoid loops
+            this.processedChanges.add(changeId)
+
+            const converted = JSON.parse(JSON.stringify(object))
+            const id = object[idField]
+            if (!doc[servicePath][id])
+              doc[servicePath][id] = { ...converted, [CHANGE_ID]: changeId }
+          }
+
+          resolve()
+        })
+      })
+
+      allChanges.push(p)
+    }
+
+    await Promise.all(allChanges)
   }
 }

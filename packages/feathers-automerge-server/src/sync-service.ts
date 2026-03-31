@@ -344,7 +344,13 @@ export class AutomergeSyncService {
           if (error?.code === 404) {
             // Record doesn't exist, create it
             debug(`Creating new record ${servicePath}:${recordId} during initial sync`)
-            await service.create(data, params)
+            try {
+              await service.create(data, params)
+            } catch (error: any) {
+              // Create failed for some reason
+              // Don't stop syncing anyway, the problem should be dealt with at a later time.
+              console.error(error)
+            }
           } else {
             throw error
           }

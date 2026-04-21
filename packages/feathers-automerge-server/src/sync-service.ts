@@ -541,4 +541,163 @@ export class AutomergeSyncService {
 
     await Promise.all(allChanges)
   }
+
+  async coherencyCheck() {
+    const result = {} as any
+    const docs = this.rootDocument.doc().documents
+
+    // Loop on automerge documents
+    for (const { query, url } of docs) {
+       debug(`Checking coherency for query ${query.name} ...`)
+       const handle = await this.repo.find(url)
+       const automergeDoc = handle.doc() as any
+       const meta = automergeDoc.__meta
+
+       result[url] = {} as any
+
+       // Loop on document's services
+       for (const servicePath of Object.keys(meta)) {
+         debug(`Service ${servicePath} ...`)
+         const idField = meta[servicePath].idField
+
+         // Expected data for current service in the automerge document
+         const expectedData = await this.options.initializeDocument(servicePath, query, docs) as Array<any>
+
+         // Create sets with object ids missing from service, and from automerge document
+         const svcIds = new Set(expectedData.map((object) => object[idField].toString()))
+         const atmIds = new Set(Object.keys(automergeDoc[servicePath]))
+         const notInAtmIds = new Set([...svcIds].filter((val) => !atmIds.has(val)))
+         const notInSvcIds = new Set([...atmIds].filter((val) => !svcIds.has(val)))
+         // const commonIds = new Set([...docIds].filter((val) => svcIds.has(val)))
+         result[url][servicePath] = {} as any
+         // result[servicePath].common = Array.from(commonIds)
+         result[url][servicePath].notInAtm = Array.from(notInAtmIds)
+         result[url][servicePath].notInSvc = Array.from(notInSvcIds)
+         // result[url][servicePath].data = Array.from(notInSvcIds)
+
+         const data = new Map()
+         result[url][servicePath].notInAtm.forEach((id: string) => {
+           const object = expectedData.find((object) => object[idField].toString() === id)
+           data.set(id, object)
+         })
+         result[url][servicePath].notInSvc.forEach((id: string) => {
+           const object = expectedData.find((object) => object[idField].toString() === id)
+           data.set(id, object)
+         })
+         result[url][servicePath].data = data
+
+         // result[servicePath].diffIds = [] as string[]
+         // for (const id of commonIds) {
+         //   const docObj = automergeDoc[servicePath][id] as any
+         //   const svcObj = serviceData.find((obj) => obj[idField].toString() === id)
+         //   const fooObj = _.omit(docObj, [ idField, CHANGE_ID ])
+         //   const barObj = _.omit(svcObj, [ idField, CHANGE_ID ])
+         //   if (!_.isEqual(fooObj, barObj)) {
+         //     result[servicePath].diffIds.push(id)
+         //   }
+         // }
+       }
+    }
+
+    return result
+  }
+
+  async manuallySyncToAutomerge(url: AnyDocumentId, infos: any, removeUnknown: boolean, addMissing: boolean) {
+    if (!this.app) return
+
+    const allChanges = [] as Promise<void>[]
+    const handle = await this.repo.find(url)
+    const automergeDoc = handle.doc() as any
+    const meta = automergeDoc.__meta
+
+    for (const servicePath of Object.keys(infos)) {
+      const service = this.app.service(servicePath)
+      const p = new Promise<void>((resolve) => {
+        handle.change((doc: any) => {
+          // const idField = meta[servicePath].idField
+          if (removeUnknown) {
+            for (const id of infos[servicePath].notInSvc) {
+               this.pendingRemovals.add(`${url}:${servicePath}:${id}`)
+               delete doc[servicePath][id]
+            }
+          }
+          if (addMissing) {
+            for (const id of infos[servicePath].notInAtm) {
+               // Generate a change id
+               const changeId = generateUUID()
+               // And remember it as already processed to avoid loops
+               this.processedChanges.add(changeId)
+
+               const svcData = infos[servicePath].data.get(id)
+               const atmData = JSON.parse(JSON.stringify(svcData))
+               doc[servicePath][id] = { ...atmData, [CHANGE_ID]: changeId }
+            }
+          }
+
+          resolve()
+        })
+      })
+
+      allChanges.push(p)
+    }
+
+    await Promise.all(allChanges)
+  }
+
+  async syncFromServices() {
+    const resp = {} as any
+    const docs = this.rootDocument.doc().documents
+    const all = [] as Promise<void>[]
+
+    // Loop on automerge documents
+    for (const { query, url } of docs) {
+       debug(`Sync for query ${query.name} ...`)
+       const handle = await this.repo.find(url)
+       const automergeDoc = handle.doc() as any
+       const meta = automergeDoc.__meta
+
+       // Loop on document's services
+       for (const servicePath of Object.keys(meta)) {
+         debug(`Service ${servicePath} ...`)
+         const idField = meta[servicePath].idField
+
+         // Expected data for current service in the automerge document
+         const expectedData = await this.options.initializeDocument(servicePath, query, docs) as Array<any>
+
+         // Create sets with object ids missing from service, and from automerge document
+         const svcIds = new Set(expectedData.map((object) => object[idField].toString()))
+         const atmIds = new Set(Object.keys(automergeDoc[servicePath]))
+         const notInAtmIds = new Set([...svcIds].filter((val) => !atmIds.has(val)))
+         const notInSvcIds = new Set([...atmIds].filter((val) => !svcIds.has(val)))
+         // const sharedIds = new Set([...atmIds].filter((val) => svcIds.has(val)))
+
+         const p = new Promise<void>((resolve) => {
+           handle.change((doc: any) => {
+             // Remove all those not in service
+             for (const id of notInSvcIds) {
+               this.pendingRemovals.add(`${url}:${servicePath}:${id}`)
+               delete doc[servicePath][id]
+             }
+
+             // Add all those not in automerge document
+             for (const id of notInAtmIds) {
+               // Generate a change id
+               const changeId = generateUUID()
+               // And remember it as already processed to avoid loops
+               this.processedChanges.add(changeId)
+
+               const svcData = expectedData.find((object) => object[idField].toString() === id)
+               const atmData = JSON.parse(JSON.stringify(svcData))
+               doc[servicePath][id] = { ...atmData, [CHANGE_ID]: changeId }
+             }
+             resolve()
+          })
+        })
+        all.push(p)
+      }
+    }
+
+    await Promise.all(all)
+    return resp
+  }
 }

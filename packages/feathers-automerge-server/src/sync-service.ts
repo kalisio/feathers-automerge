@@ -437,8 +437,21 @@ export class AutomergeSyncService {
                 if (!this.processedChanges.has(changeId)) {
                   // Patched
                   debug(`${changeId}/automerge: Patching ${id} on ${path} ...`)
-                  await this.app.service(path).patch(id, data, params)
+                  try {
+                    await this.app.service(path).patch(id, data, params)
+                  } catch (error: any) {
+                    if (error?.code === 404) {
+                      // An object got patched in automerge but we don't know it in the service
+                      debug(`${changeId}/automerge: Patching (create!) ${id} on ${path} ...`)
+                      await this.app.service(path).create(data, params)
+                      debug(`${changeId}/automerge: Done patching (create!) ${id} on ${path}`)
+                    } else {
+                      debug("patch error:")
+                      debug(error)
+                    }
+                  }
                   debug(`${changeId}/automerge: Done patching ${id} on ${path}`)
+                  // }
                 }
               }
 

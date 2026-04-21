@@ -436,22 +436,23 @@ export class AutomergeSyncService {
               } else if (before[path]?.[id]) {
                 if (!this.processedChanges.has(changeId)) {
                   // Patched
-                  debug(`${changeId}/automerge: Patching ${id} on ${path} ...`)
+                  let doCreate = false
                   try {
-                    await this.app.service(path).patch(id, data, params)
+                    await this.app.service(path).get(id)
                   } catch (error: any) {
-                    if (error?.code === 404) {
-                      // An object got patched in automerge but we don't know it in the service
-                      debug(`${changeId}/automerge: Patching (create!) ${id} on ${path} ...`)
-                      await this.app.service(path).create(data, params)
-                      debug(`${changeId}/automerge: Done patching (create!) ${id} on ${path}`)
-                    } else {
-                      debug("patch error:")
-                      debug(error)
-                    }
+                    doCreate = true
                   }
-                  debug(`${changeId}/automerge: Done patching ${id} on ${path}`)
-                  // }
+
+                  if (doCreate ) {
+                    // An object got patched in automerge but we don't know it in the service
+                    debug(`${changeId}/automerge: Patching (create!) ${id} on ${path} ...`)
+                    await this.app.service(path).create(data, params)
+                    debug(`${changeId}/automerge: Done patching (create!) ${id} on ${path}`)
+                  } else {
+                    debug(`${changeId}/automerge: Patching ${id} on ${path} ...`)
+                    await this.app.service(path).patch(id, data, params)
+                    debug(`${changeId}/automerge: Done patching ${id} on ${path}`)
+                  }
                 }
               }
 

@@ -391,7 +391,9 @@ export class AutomergeSyncService {
         if (path === '__meta') {
            return
         }
-        // id may be undefined when path has just been added as a newly listened service
+        // id may be undefined when path (the service path):
+        //  - has just been added as a newly listened service
+        //  - just got entirely removed
         if (id) {
           serviceChanges[path] = serviceChanges[path] || new Set()
           serviceChanges[path].add(id.toString())
@@ -481,6 +483,33 @@ export class AutomergeSyncService {
         await this.handleEvent(servicePath, eventName, data, context)
       })
     )
+  }
+
+  async unlistenService(servicePath: string) {
+    if (!this.app) return
+
+    const allChanges = [] as Promise<void>[]
+    const docs = this.rootDocument.doc().documents
+
+    for (const { url } of docs) {
+      const handle = await this.repo.find(url)
+      const automergeDoc = handle.doc() as any
+      const meta = automergeDoc.__meta
+      if (!meta[servicePath]) continue
+
+      const p = new Promise<void>((resolve) => {
+        handle.change((doc: any) => {
+          delete doc[servicePath]
+          delete doc.__meta[servicePath]
+
+          resolve()
+        })
+      })
+
+      allChanges.push(p)
+    }
+
+    await Promise.all(allChanges)
   }
 
   async setup(app: Application, myPath: string) {

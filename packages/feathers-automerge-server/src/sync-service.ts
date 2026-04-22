@@ -514,7 +514,12 @@ export class AutomergeSyncService {
     debug(`Populating automerge document ${url} ...`)
 
     for (const servicePath of Object.keys(meta)) {
-      const service = this.app.service(servicePath)
+      let service
+      // Do not crash if service can't be found
+      try {
+        service = this.app.service(servicePath)
+      } catch (error: any) {}
+      if (!service) continue
       const idField = meta[servicePath].idField
       const serviceData = await this.options.initializeDocument(servicePath, query, docs) as Array<any>
       if (!serviceData?.length) continue

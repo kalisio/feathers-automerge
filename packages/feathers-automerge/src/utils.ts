@@ -56,7 +56,6 @@ export async function findDocument(repo: Repo, id: AnyDocumentId): Promise<Augme
   if ("subscribe" in progress) {
     const handle = await new Promise<AugmentedDocHandle>((resolve, reject) => {
       const unsubscribe = progress.subscribe(state => {
-        console.log(`state is ${state.handle.state}`)
         if (state.handle.state === 'ready') {
           unsubscribe()
           resolve({ handle: state.handle, wasKnown })

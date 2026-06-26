@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.4.0](https://github.com/kalisio/feathers-automerge/compare/v0.3.8...v0.4.0) (2026-06-26)
+
+
+### Features
+
+* Allow to specify services that could be synchronized ([#64](https://github.com/kalisio/feathers-automerge/issues/64)) ([03d14ef](https://github.com/kalisio/feathers-automerge/commit/03d14efeec8cad045f18a9c5f0a60316ea66603a))
+
+
+
+
+
 ## [0.3.8](https://github.com/kalisio/offline-sync/compare/v0.3.7...v0.3.8) (2026-01-13)
 
 **Note:** Version bump only for package @kalisio/feathers-automerge

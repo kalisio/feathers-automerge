@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.4.0](https://github.com/kalisio/feathers-automerge/compare/v0.3.8...v0.4.0) (2026-06-26)
+
+
+### Bug Fixes
+
+* catch error when create fails in syncExistingData ([#71](https://github.com/kalisio/feathers-automerge/issues/71)) ([b008511](https://github.com/kalisio/feathers-automerge/commit/b008511ea4ea92037655ead1b31a6a97a42e2285))
+* catch exception thrown when service can't be found. ([#59](https://github.com/kalisio/feathers-automerge/issues/59)) ([085c7b5](https://github.com/kalisio/feathers-automerge/commit/085c7b55a248bb45d8276e16a17de55a2e2cbd5a))
+* handle case where event's payload is undefined ([#61](https://github.com/kalisio/feathers-automerge/issues/61)) ([472b558](https://github.com/kalisio/feathers-automerge/commit/472b55887720cd9b46fea3e779e5e9337544afb8))
+* record changeId _before_ pushing it in automerge. ([#63](https://github.com/kalisio/feathers-automerge/issues/63)) ([5710437](https://github.com/kalisio/feathers-automerge/commit/571043706ddc156916e106ddc99162a2e592be65))
+* record changeId before updating automerge document [#62](https://github.com/kalisio/feathers-automerge/issues/62) ([#68](https://github.com/kalisio/feathers-automerge/issues/68)) ([c403847](https://github.com/kalisio/feathers-automerge/commit/c4038477ceac443f0ef45bb896514c442f00f8b7))
+
+
+### Features
+
+* Add ability to listen to dynamically created services. ([#70](https://github.com/kalisio/feathers-automerge/issues/70)) ([1f7f0c9](https://github.com/kalisio/feathers-automerge/commit/1f7f0c9fa06174b8ca92b0cf53487224bb0085f2))
+* Allow to specify services that could be synchronized ([#64](https://github.com/kalisio/feathers-automerge/issues/64)) ([03d14ef](https://github.com/kalisio/feathers-automerge/commit/03d14efeec8cad045f18a9c5f0a60316ea66603a))
+* exit early from handleEvent under specific conditions ([#65](https://github.com/kalisio/feathers-automerge/issues/65)) ([#69](https://github.com/kalisio/feathers-automerge/issues/69)) ([e10968c](https://github.com/kalisio/feathers-automerge/commit/e10968c49e7b75b452a010e275ebbc6859c47ac6))
+* Implement live query mechanism ([#40](https://github.com/kalisio/feathers-automerge/issues/40)) ([ee062c6](https://github.com/kalisio/feathers-automerge/commit/ee062c63d090d4ad50de65f262d849f6f375f3ed))
+
+
+### Reverts
+
+* Revert "chore: added npm rc file to ease publishing" ([d7ea049](https://github.com/kalisio/feathers-automerge/commit/d7ea049f7931fbebbd15c62ae93bf16686920ea4))
+
+
+
+
+
 ## [0.3.8](https://github.com/kalisio/offline-sync/compare/v0.3.7...v0.3.8) (2026-01-13)
 
 **Note:** Version bump only for package feathers-automerge
